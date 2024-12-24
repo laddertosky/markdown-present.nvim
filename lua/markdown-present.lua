@@ -1,6 +1,17 @@
 local M = {}
 
---- @return string[]
+local state = {
+	current_page = 1,
+	pages = {},
+	floats = {
+		body = {
+			bufno = -1,
+			win = -1,
+		},
+	},
+}
+
+--- @return string[][]
 local parse_markdown = function(opts)
 	opts = opts or {}
 	opts.bufno = opts.bufno or vim.api.nvim_get_current_buf()
@@ -30,10 +41,42 @@ local parse_markdown = function(opts)
 	return pages
 end
 
+local window_config = {
+	body = {
+		relative = "editor",
+		width = vim.o.columns,
+		height = vim.o.lines,
+		border = "rounded",
+		style = "minimal",
+		row = 0,
+		col = 0,
+	},
+}
+
+local create_window = function(opts, enter)
+	enter = enter or false
+	local bufno = vim.api.nvim_create_buf(false, true)
+	local win = vim.api.nvim_open_win(bufno, enter, opts)
+	vim.bo[bufno].filetype = "markdown"
+	return { bufno = bufno, win = win }
+end
+
 local start_present = function(opts)
 	opts = opts or {}
-	local parsed = parse_markdown(opts)
-	print(vim.inspect(parsed))
+	state.pages = parse_markdown(opts)
+
+	state.floats.body = create_window(window_config.body, true)
+	vim.api.nvim_buf_set_lines(state.floats.body.bufno, 0, -1, false, state.pages[1])
+
+	vim.keymap.set("n", "<c-n>", function()
+		state.current_page = math.min(state.current_page + 1, #state.pages)
+		vim.api.nvim_buf_set_lines(state.floats.body.bufno, 0, -1, false, state.pages[state.current_page])
+	end, { buffer = state.floats.body.bufno })
+
+	vim.keymap.set("n", "<c-p>", function()
+		state.current_page = math.max(state.current_page - 1, 1)
+		vim.api.nvim_buf_set_lines(state.floats.body.bufno, 0, -1, false, state.pages[state.current_page])
+	end, { buffer = state.floats.body.bufno })
 end
 
 M.setup = function() end
