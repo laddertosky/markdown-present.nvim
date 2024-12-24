@@ -1,32 +1,23 @@
 local M = {}
 
-local state = {
-	current_page = 1,
-	pages = {},
-	floats = {
-		title = {
-			bufno = -1,
-			win = -1,
-		},
-		body = {
-			bufno = -1,
-			win = -1,
-		},
-		footer = {
-			bufno = -1,
-			win = -1,
-		},
-		background = {
-			bufno = -1,
-			win = -1,
-		},
-	},
-	filename = "",
-}
+--- @class Float
+--- @field win integer
+--- @field bufno integer
 
 --- @class Page
 --- @field title string
 --- @field contents string[]
+
+local state = {
+	filename = "",
+	current_page = 1,
+
+	--- @type Page[]
+	pages = {},
+
+	--- @type table<string, Float>
+	floats = {},
+}
 
 --- @return Page[]
 local parse_markdown = function(opts)
@@ -72,6 +63,7 @@ local parse_markdown = function(opts)
 	return pages
 end
 
+--- @return table<string, vim.api.keyset.win_config>
 local create_window_config = function()
 	local border_size = 2
 	local indent = 8
@@ -123,6 +115,7 @@ local create_window_config = function()
 	}
 end
 
+--- @return Float
 local create_window = function(opts, enter)
 	enter = enter or false
 	local bufno = vim.api.nvim_create_buf(false, true)
@@ -169,14 +162,24 @@ M.start_present = function(opts)
 	end, { buffer = state.floats.body.bufno })
 
 	vim.keymap.set("n", "q", function()
-		for _, float in pairs(state.floats) do
-			vim.api.nvim_win_close(float.win, true)
-		end
-
-		state.current_page = 1
-		state.pages = {}
-		state.floats = {}
+		vim.api.nvim_win_close(state.floats.body.win, true)
 	end, { buffer = state.floats.body.bufno })
+
+	vim.api.nvim_create_autocmd("BufLeave", {
+		group = vim.api.nvim_create_augroup("markdown-present", {}),
+		buffer = state.floats.body.bufno,
+		callback = function()
+			for _, float in pairs(state.floats) do
+				if vim.api.nvim_win_is_valid(float.win) then
+					vim.api.nvim_win_close(float.win, true)
+				end
+			end
+
+			state.current_page = 1
+			state.pages = {}
+			state.floats = {}
+		end,
+	})
 end
 
 return M
