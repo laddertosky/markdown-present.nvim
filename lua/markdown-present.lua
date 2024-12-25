@@ -19,6 +19,8 @@ local state = {
 	floats = {},
 }
 
+local auto_group = vim.api.nvim_create_augroup("markdown-present", {})
+
 --- @return Page[]
 local parse_markdown = function(opts)
 	opts = opts or {}
@@ -31,7 +33,7 @@ local parse_markdown = function(opts)
 
 	--- @type Page
 	local current_page = {
-		title = "",
+		title = state.filename, -- using filename as fallback title
 		contents = {},
 	}
 
@@ -54,6 +56,8 @@ local parse_markdown = function(opts)
 					contents = {},
 				}
 			end
+		elseif #current_page.contents == 0 and #(vim.trim(line)) == 0 then
+			-- do not store first empty lines
 		else
 			table.insert(current_page.contents, line)
 		end
@@ -69,8 +73,8 @@ local create_window_config = function()
 	local indent = 8
 	local float_width = vim.o.columns - indent * 2
 
-	local title_height = 2
-	local footer_height = 1
+	local title_height = 3
+	local footer_height = 2
 	local body_height = vim.o.lines - footer_height - border_size - title_height
 
 	return {
@@ -82,7 +86,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = 0,
 			col = 0,
-			zindex = 100,
+			zindex = 10,
 		},
 		body = {
 			relative = "editor",
@@ -92,7 +96,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = title_height + border_size,
 			col = indent,
-			zindex = 80,
+			zindex = 8,
 		},
 		footer = {
 			relative = "editor",
@@ -102,7 +106,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = body_height + border_size + title_height,
 			col = indent,
-			zindex = 70,
+			zindex = 7,
 		},
 		background = {
 			relative = "editor",
@@ -112,7 +116,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = 0,
 			col = 0,
-			zindex = 60,
+			zindex = 5,
 		},
 	}
 end
@@ -137,15 +141,20 @@ end
 
 local set_page_content = function()
 	--- TODO: center the title
-	vim.api.nvim_buf_set_lines(state.floats.title.bufno, 0, -1, false, { state.pages[state.current_page].title })
-	vim.api.nvim_buf_set_lines(state.floats.body.bufno, 0, -1, false, state.pages[state.current_page].contents)
-	vim.api.nvim_buf_set_lines(state.floats.footer.bufno, 0, -1, false, footer_content())
+
+	local width = vim.api.nvim_win_get_width(state.floats.title.win)
+	local raw_title = state.pages[state.current_page].title
+	local padding = string.rep(" ", (width - #raw_title) / 2)
+	local title = padding .. raw_title
+	vim.api.nvim_buf_set_lines(state.floats.body.bufno, 1, -1, false, state.pages[state.current_page].contents)
+	vim.api.nvim_buf_set_lines(state.floats.title.bufno, 1, -1, false, { title })
+	vim.api.nvim_buf_set_lines(state.floats.footer.bufno, 1, -1, false, footer_content())
 end
 
 M.start_present = function(opts)
 	opts = opts or {}
-	state.pages = parse_markdown(opts)
 	state.filename = vim.fn.expand("%:t")
+	state.pages = parse_markdown(opts)
 
 	local window_config = create_window_config()
 	state.floats.title = create_window(window_config.title, false)
@@ -177,7 +186,7 @@ M.start_present = function(opts)
 	end, { buffer = state.floats.body.bufno })
 
 	vim.api.nvim_create_autocmd("BufLeave", {
-		group = vim.api.nvim_create_augroup("markdown-present", {}),
+		group = auto_group,
 		buffer = state.floats.body.bufno,
 		callback = function()
 			for _, float in pairs(state.floats) do
@@ -189,6 +198,18 @@ M.start_present = function(opts)
 			state.current_page = 1
 			state.pages = {}
 			state.floats = {}
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("VimResized", {
+		group = auto_group,
+		buffer = state.floats.body.bufno,
+		callback = function()
+			local updated_config = create_window_config()
+			for name, float in pairs(state.floats) do
+				vim.api.nvim_win_set_config(float.win, updated_config[name])
+			end
+			set_page_content()
 		end,
 	})
 end
