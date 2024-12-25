@@ -102,6 +102,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = body_height + border_size + title_height,
 			col = indent,
+			zindex = 70,
 		},
 		background = {
 			relative = "editor",
@@ -111,6 +112,7 @@ local create_window_config = function()
 			style = "minimal",
 			row = 0,
 			col = 0,
+			zindex = 60,
 		},
 	}
 end
@@ -134,6 +136,7 @@ local footer_content = function()
 end
 
 local set_page_content = function()
+	--- TODO: center the title
 	vim.api.nvim_buf_set_lines(state.floats.title.bufno, 0, -1, false, { state.pages[state.current_page].title })
 	vim.api.nvim_buf_set_lines(state.floats.body.bufno, 0, -1, false, state.pages[state.current_page].contents)
 	vim.api.nvim_buf_set_lines(state.floats.footer.bufno, 0, -1, false, footer_content())
@@ -152,12 +155,20 @@ M.start_present = function(opts)
 	set_page_content()
 
 	vim.keymap.set("n", "<c-n>", function()
-		state.current_page = math.min(state.current_page + 1, #state.pages)
+		if state.current_page == #state.pages then
+			return
+		end
+
+		state.current_page = state.current_page + 1
 		set_page_content()
 	end, { buffer = state.floats.body.bufno })
 
 	vim.keymap.set("n", "<c-p>", function()
-		state.current_page = math.max(state.current_page - 1, 1)
+		if state.current_page == 1 then
+			return
+		end
+
+		state.current_page = state.current_page - 1
 		set_page_content()
 	end, { buffer = state.floats.body.bufno })
 
